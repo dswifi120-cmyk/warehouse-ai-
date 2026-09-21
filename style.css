@@ -1,1 +1,357 @@
+* {
+  box-sizing: border-box;
+}
 
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f3f6f9;
+  color: #1f2937;
+}
+
+
+/* TOP BAR */
+
+.topbar {
+  background: #075e54;
+  color: white;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 23px;
+}
+
+.topbar p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+
+/* USER */
+
+.user-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-box label {
+  font-size: 12px;
+}
+
+.user-box select {
+  padding: 9px;
+  border-radius: 6px;
+  border: none;
+}
+
+
+/* MAIN */
+
+.container {
+  width: 96%;
+  max-width: 1400px;
+  margin: 18px auto;
+}
+
+
+/* CARDS */
+
+.upload-card,
+.filter-card,
+.table-card,
+.summary-box {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.upload-card {
+  padding: 20px;
+}
+
+.upload-card h2 {
+  margin-top: 0;
+}
+
+.help-text {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+
+/* UPLOAD */
+
+.upload-button {
+  display: inline-block;
+  background: #075e54;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.selected-files {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #374151;
+}
+
+
+.primary-button {
+  margin-top: 15px;
+  width: 100%;
+  border: none;
+  padding: 13px;
+  background: #16a34a;
+  color: white;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+}
+
+
+.status {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+
+/* FILTER */
+
+.filter-card {
+  margin-top: 15px;
+  padding: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-item label {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.filter-item input {
+  padding: 9px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+
+.secondary-button,
+.print-button,
+.add-button {
+  border: none;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.secondary-button {
+  background: #e5e7eb;
+}
+
+.print-button {
+  background: #2563eb;
+  color: white;
+}
+
+
+/* SUMMARY */
+
+.summary {
+  display: flex;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.summary-box {
+  padding: 15px 20px;
+  flex: 1;
+}
+
+.summary-box span {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.summary-box strong {
+  display: block;
+  font-size: 23px;
+  margin-top: 5px;
+}
+
+
+/* TABLE */
+
+.table-card {
+  margin-top: 15px;
+  padding: 15px;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-header h2 {
+  margin: 0;
+}
+
+.add-button {
+  background: #075e54;
+  color: white;
+}
+
+
+.table-wrapper {
+  overflow-x: auto;
+  margin-top: 15px;
+}
+
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+th {
+  background: #075e54;
+  color: white;
+  padding: 11px;
+  text-align: left;
+}
+
+td {
+  padding: 7px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+td input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+}
+
+
+.delete-btn {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 700px) {
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .user-box {
+    width: 100%;
+  }
+
+  .user-box select {
+    width: 100%;
+  }
+
+  .container {
+    width: 98%;
+  }
+
+  .filter-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-item input,
+  .secondary-button,
+  .print-button {
+    width: 100%;
+  }
+
+  .summary {
+    flex-direction: column;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-button {
+    width: 100%;
+  }
+}
+
+
+/* PRINT */
+
+@media print {
+
+  body {
+    background: white;
+  }
+
+  body > * {
+    display: none !important;
+  }
+
+  #printArea {
+    display: block !important;
+  }
+
+  #printArea table {
+    min-width: 0;
+    width: 100%;
+  }
+
+  #printArea th,
+  #printArea td {
+    border: 1px solid #000;
+    padding: 6px;
+  }
+
+  #printArea th {
+    background: #eee !important;
+    color: black !important;
+  }
+
+  .print-title {
+    text-align: center;
+    margin-bottom: 15px;
+  }
+}
