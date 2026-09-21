@@ -1,22 +1,21 @@
 // ==========================================
-// WAREHOUSE AI - MAIN APP
+// WAREHOUSE AI - SUPABASE CONNECTED APP
 // ==========================================
 
 
 // ---------- SUPABASE CONFIG ----------
-// পরে এখানে Supabase URL + Key বসানো হবে.
 
-const SUPABASE_URL = "";
-const SUPABASE_ANON_KEY = "";
+const SUPABASE_URL =
+  "https://ogcjzkqeijayawxlhmch.supabase.co";
 
-let db = null;
+const SUPABASE_ANON_KEY =
+  "sb_publishable_wazNbKZiZVls_ENkZ-ElkA_VaAS1BUf";
 
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  db = window.supabase.createClient(
+const db =
+  window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_ANON_KEY
   );
-}
 
 
 // ---------- GLOBAL DATA ----------
@@ -79,6 +78,96 @@ function getToday() {
 }
 
 
+// ---------- UUID CHECK ----------
+
+function isUUID(value) {
+
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+}
+
+
+// ---------- LOAD DATA FROM SUPABASE ----------
+
+async function loadRowsFromSupabase() {
+
+  scanStatus.textContent =
+    "⏳ Supabase থেকে data load হচ্ছে...";
+
+  const {
+    data,
+    error
+  } = await db
+    .from("warehouse_entries")
+    .select("*")
+    .order("entry_date", {
+      ascending: false
+    })
+    .order("created_at", {
+      ascending: true
+    });
+
+
+  if (error) {
+
+    console.error(
+      "Supabase Load Error:",
+      error
+    );
+
+    scanStatus.textContent =
+      "❌ Database থেকে data load করা যায়নি।";
+
+    alert(
+      "Supabase connection/database error.\n\n" +
+      error.message
+    );
+
+    return;
+
+  }
+
+
+  rows =
+    (data || []).map(
+      item => ({
+
+        id:
+          item.id,
+
+        date:
+          item.entry_date,
+
+        product:
+          item.product_name,
+
+        quantity:
+          Number(item.quantity) || 0,
+
+        unit:
+          item.unit || "pcs",
+
+        reference:
+          item.reference || "",
+
+        entry_by:
+          item.entry_by || ""
+
+      })
+    );
+
+
+  renderTable();
+
+  scanStatus.textContent =
+    rows.length > 0
+      ? `✅ ${rows.length}টি saved row পাওয়া গেছে।`
+      : "✅ Database connected। এখন data add করুন।";
+
+}
+
+
 // ---------- FILE SELECT ----------
 
 invoiceInput.addEventListener(
@@ -90,9 +179,15 @@ invoiceInput.addEventListener(
 
     selectedFilesBox.innerHTML = "";
 
-    if (selectedFiles.length === 0) {
+
+    if (
+      selectedFiles.length === 0
+    ) {
+
       return;
+
     }
+
 
     const title =
       document.createElement("div");
@@ -127,13 +222,16 @@ scanButton.addEventListener(
   "click",
   async function () {
 
-    if (selectedFiles.length === 0) {
+    if (
+      selectedFiles.length === 0
+    ) {
 
       alert(
         "আগে Invoice/Chalan-এর ছবি নির্বাচন করুন।"
       );
 
       return;
+
     }
 
 
@@ -154,11 +252,14 @@ scanButton.addEventListener(
         scanStatus.textContent =
           `🤖 ${i + 1}/${selectedFiles.length} invoice scan হচ্ছে...`;
 
+
         const file =
           selectedFiles[i];
 
+
         const formData =
           new FormData();
+
 
         formData.append(
           "invoice",
@@ -198,23 +299,31 @@ scanButton.addEventListener(
             item => {
 
               addOrMergeRow({
+
                 date:
-                  result.date || getToday(),
+                  result.date ||
+                  getToday(),
 
                 product:
-                  item.product || "",
+                  item.product ||
+                  "",
 
                 quantity:
-                  Number(item.quantity) || 0,
+                  Number(
+                    item.quantity
+                  ) || 0,
 
                 unit:
-                  item.unit || "pcs",
+                  item.unit ||
+                  "pcs",
 
                 reference:
-                  result.reference || "",
+                  result.reference ||
+                  "",
 
                 entry_by:
                   userSelect.value
+
               });
 
             }
@@ -225,22 +334,41 @@ scanButton.addEventListener(
       }
 
 
-      scanStatus.textContent =
-        "✅ সব invoice scan শেষ হয়েছে।";
-
-
       renderTable();
+
+
+      scanStatus.textContent =
+        "⏳ Scan complete। Database-এ save হচ্ছে...";
+
+
+      await saveAllRows();
+
+
+      scanStatus.textContent =
+        "✅ Scan + Database save সম্পূর্ণ হয়েছে।";
+
+
+      selectedFiles = [];
+
+      invoiceInput.value = "";
+
+      selectedFilesBox.innerHTML = "";
 
 
     } catch (error) {
 
-      console.error(error);
+      console.error(
+        "Scan Error:",
+        error
+      );
 
       scanStatus.textContent =
         "❌ Scan করতে সমস্যা হয়েছে।";
 
+
       alert(
-        "AI scan করতে সমস্যা হয়েছে। পরে আবার চেষ্টা করুন।"
+        "AI scan করতে সমস্যা হয়েছে।\n\n" +
+        error.message
       );
 
     } finally {
@@ -253,7 +381,7 @@ scanButton.addEventListener(
 );
 
 
-// ---------- ADD / MERGE ----------
+// ---------- PRODUCT NORMALIZE ----------
 
 function normalizeProductName(name) {
 
@@ -264,6 +392,8 @@ function normalizeProductName(name) {
 
 }
 
+
+// ---------- ADD / MERGE ----------
 
 function addOrMergeRow(item) {
 
@@ -276,12 +406,17 @@ function addOrMergeRow(item) {
   const existing =
     rows.find(
       row =>
+
         normalizeProductName(
           row.product
         ) === normalized
+
         &&
+
         row.unit === item.unit
+
         &&
+
         row.date === item.date
     );
 
@@ -319,6 +454,7 @@ function addOrMergeRow(item) {
           .split(", ")
           .filter(Boolean);
 
+
       if (
         !names.includes(
           item.entry_by
@@ -331,6 +467,7 @@ function addOrMergeRow(item) {
 
       }
 
+
       existing.entry_by =
         names.join(", ");
 
@@ -339,32 +476,172 @@ function addOrMergeRow(item) {
   } else {
 
     rows.push({
+
       id:
-        Date.now() +
-        Math.random(),
+        null,
 
       date:
-        item.date || getToday(),
+        item.date ||
+        getToday(),
 
       product:
-        item.product || "",
+        item.product ||
+        "",
 
       quantity:
-        Number(item.quantity) || 0,
+        Number(
+          item.quantity
+        ) || 0,
 
       unit:
-        item.unit || "pcs",
+        item.unit ||
+        "pcs",
 
       reference:
-        item.reference || "",
+        item.reference ||
+        "",
 
       entry_by:
         item.entry_by ||
-        userSelect.value
+        userSelect.value ||
+        "Unknown"
 
     });
 
   }
+
+}
+
+
+// ---------- SAVE ALL ----------
+
+async function saveAllRows() {
+
+  if (
+    rows.length === 0
+  ) {
+
+    return;
+
+  }
+
+
+  for (
+    const row of rows
+  ) {
+
+    if (
+      !row.product ||
+      !row.product.trim()
+    ) {
+
+      continue;
+
+    }
+
+
+    const dbData = {
+
+      entry_date:
+        row.date ||
+        getToday(),
+
+      product_name:
+        row.product.trim(),
+
+      quantity:
+        Number(
+          row.quantity
+        ) || 0,
+
+      unit:
+        row.unit ||
+        "pcs",
+
+      reference:
+        row.reference ||
+        "",
+
+      entry_by:
+        row.entry_by ||
+        userSelect.value ||
+        "Unknown"
+
+    };
+
+
+    // Existing row update
+
+    if (
+      isUUID(row.id)
+    ) {
+
+      const {
+        error
+      } =
+        await db
+          .from(
+            "warehouse_entries"
+          )
+          .update(dbData)
+          .eq(
+            "id",
+            row.id
+          );
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        throw error;
+
+      }
+
+    }
+
+
+    // New row insert
+
+    else {
+
+      const {
+        data,
+        error
+      } =
+        await db
+          .from(
+            "warehouse_entries"
+          )
+          .insert(
+            dbData
+          )
+          .select()
+          .single();
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        throw error;
+
+      }
+
+
+      row.id =
+        data.id;
+
+    }
+
+  }
+
+
+  renderTable();
 
 }
 
@@ -380,7 +657,9 @@ function renderTable() {
     (row, index) => {
 
       const tr =
-        document.createElement("tr");
+        document.createElement(
+          "tr"
+        );
 
 
       tr.innerHTML = `
@@ -431,18 +710,22 @@ function renderTable() {
         </td>
 
         <td>
+
           <button
             class="delete-btn"
             onclick="deleteRow(${index})"
           >
             Delete
           </button>
+
         </td>
 
       `;
 
 
-      tableBody.appendChild(tr);
+      tableBody.appendChild(
+        tr
+      );
 
     }
   );
@@ -453,10 +736,10 @@ function renderTable() {
 }
 
 
-// ---------- UPDATE ----------
+// ---------- UPDATE ROW ----------
 
 window.updateRow =
-  function (
+  async function (
     index,
     field,
     value
@@ -475,13 +758,86 @@ window.updateRow =
     rows[index][field] =
       value;
 
+
+    const row =
+      rows[index];
+
+
+    // যদি database-এ already থাকে
+
+    if (
+      isUUID(row.id)
+    ) {
+
+      const dbData = {
+
+        entry_date:
+          row.date,
+
+        product_name:
+          row.product,
+
+        quantity:
+          Number(
+            row.quantity
+          ) || 0,
+
+        unit:
+          row.unit ||
+          "pcs",
+
+        reference:
+          row.reference ||
+          "",
+
+        entry_by:
+          row.entry_by ||
+          userSelect.value ||
+          "Unknown"
+
+      };
+
+
+      const {
+        error
+      } =
+        await db
+          .from(
+            "warehouse_entries"
+          )
+          .update(
+            dbData
+          )
+          .eq(
+            "id",
+            row.id
+          );
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        alert(
+          "Database update হয়নি:\n" +
+          error.message
+        );
+
+      }
+
+    }
+
   };
 
 
 // ---------- DELETE ----------
 
 window.deleteRow =
-  function (index) {
+  async function (
+    index
+  ) {
 
     if (
       !confirm(
@@ -494,10 +850,53 @@ window.deleteRow =
     }
 
 
+    const row =
+      rows[index];
+
+
+    // Database row হলে database থেকেও delete
+
+    if (
+      isUUID(row.id)
+    ) {
+
+      const {
+        error
+      } =
+        await db
+          .from(
+            "warehouse_entries"
+          )
+          .delete()
+          .eq(
+            "id",
+            row.id
+          );
+
+
+      if (error) {
+
+        console.error(
+          error
+        );
+
+        alert(
+          "Database থেকে delete হয়নি:\n" +
+          error.message
+        );
+
+        return;
+
+      }
+
+    }
+
+
     rows.splice(
       index,
       1
     );
+
 
     renderTable();
 
@@ -513,7 +912,7 @@ addRowButton.addEventListener(
     rows.push({
 
       id:
-        Date.now(),
+        null,
 
       date:
         getToday(),
@@ -531,7 +930,8 @@ addRowButton.addEventListener(
         "",
 
       entry_by:
-        userSelect.value
+        userSelect.value ||
+        "Unknown"
 
     });
 
@@ -556,9 +956,15 @@ function updateSummary() {
     "totalProducts"
   ).textContent =
     rows.reduce(
-      (total, row) =>
+      (
+        total,
+        row
+      ) =>
         total +
-        Number(row.quantity || 0),
+        Number(
+          row.quantity ||
+          0
+        ),
       0
     );
 
@@ -574,13 +980,18 @@ todayButton.addEventListener(
     const today =
       getToday();
 
+
     document.getElementById(
       "fromDate"
-    ).value = today;
+    ).value =
+      today;
+
 
     document.getElementById(
       "toDate"
-    ).value = today;
+    ).value =
+      today;
+
 
     filterRows();
 
@@ -607,13 +1018,17 @@ function filterRows() {
       "fromDate"
     ).value;
 
+
   const to =
     document.getElementById(
       "toDate"
     ).value;
 
 
-  if (!from && !to) {
+  if (
+    !from &&
+    !to
+  ) {
 
     renderTable();
 
@@ -630,15 +1045,21 @@ function filterRows() {
           from &&
           row.date < from
         ) {
+
           return false;
+
         }
+
 
         if (
           to &&
           row.date > to
         ) {
+
           return false;
+
         }
+
 
         return true;
 
@@ -649,10 +1070,13 @@ function filterRows() {
   const original =
     rows;
 
+
   rows =
     filtered;
 
+
   renderTable();
+
 
   rows =
     original;
@@ -698,7 +1122,10 @@ function createPrint() {
     rows;
 
 
-  if (from || to) {
+  if (
+    from ||
+    to
+  ) {
 
     data =
       rows.filter(
@@ -708,15 +1135,21 @@ function createPrint() {
             from &&
             row.date < from
           ) {
+
             return false;
+
           }
+
 
           if (
             to &&
             row.date > to
           ) {
+
             return false;
+
           }
+
 
           return true;
 
@@ -733,8 +1166,8 @@ function createPrint() {
       <h2>Warehouse OUT Report</h2>
 
       <p>
-        ${from || "All"} 
-        to 
+        ${from || "All"}
+        to
         ${to || "All"}
       </p>
 
@@ -769,17 +1202,29 @@ function createPrint() {
 
         <tr>
 
-          <td>${escapeHtml(row.date)}</td>
+          <td>
+            ${escapeHtml(row.date)}
+          </td>
 
-          <td>${escapeHtml(row.product)}</td>
+          <td>
+            ${escapeHtml(row.product)}
+          </td>
 
-          <td>${row.quantity}</td>
+          <td>
+            ${row.quantity}
+          </td>
 
-          <td>${escapeHtml(row.unit)}</td>
+          <td>
+            ${escapeHtml(row.unit)}
+          </td>
 
-          <td>${escapeHtml(row.reference)}</td>
+          <td>
+            ${escapeHtml(row.reference)}
+          </td>
 
-          <td>${escapeHtml(row.entry_by)}</td>
+          <td>
+            ${escapeHtml(row.entry_by)}
+          </td>
 
         </tr>
 
@@ -808,7 +1253,9 @@ function createPrint() {
 
 function escapeHtml(value) {
 
-  return String(value ?? "")
+  return String(
+    value ?? ""
+  )
     .replace(
       /&/g,
       "&amp;"
@@ -833,6 +1280,24 @@ function escapeHtml(value) {
 }
 
 
-// ---------- INITIAL ----------
+// ---------- INITIALIZE ----------
 
-renderTable();
+(async function () {
+
+  try {
+
+    await loadRowsFromSupabase();
+
+  } catch (error) {
+
+    console.error(
+      "Initialization Error:",
+      error
+    );
+
+    scanStatus.textContent =
+      "❌ App initialize করতে সমস্যা হয়েছে।";
+
+  }
+
+})();
