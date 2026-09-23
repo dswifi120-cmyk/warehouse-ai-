@@ -1,9 +1,6 @@
-// ==========================================
-// WAREHOUSE AI - SUPABASE CONNECTED APP
-// ==========================================
-
-
-// ---------- SUPABASE CONFIG ----------
+// ===============================
+// SUPABASE CONFIG
+// ===============================
 
 const SUPABASE_URL =
   "https://ogcjzkqeijayawxlhmch.supabase.co";
@@ -11,25 +8,35 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   "sb_publishable_wazNbKZiZVls_ENkZ-ElkA_VaAS1BUf";
 
-const db =
-  window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  );
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
 
-// ---------- GLOBAL DATA ----------
+// ===============================
+// VERCEL AI API
+// ===============================
 
-let selectedFiles = [];
+const AI_API_URL =
+  "https://warehouse-ai-dun.vercel.app/api/parse-invoice";
+
+
+// ===============================
+// GLOBAL DATA
+// ===============================
+
 let rows = [];
 
 
-// ---------- ELEMENTS ----------
+// ===============================
+// ELEMENTS
+// ===============================
 
 const invoiceInput =
   document.getElementById("invoiceInput");
 
-const selectedFilesBox =
+const selectedFiles =
   document.getElementById("selectedFiles");
 
 const scanButton =
@@ -44,8 +51,17 @@ const userSelect =
 const tableBody =
   document.getElementById("productTableBody");
 
-const addRowButton =
-  document.getElementById("addRowButton");
+const totalRows =
+  document.getElementById("totalRows");
+
+const totalProducts =
+  document.getElementById("totalProducts");
+
+const fromDate =
+  document.getElementById("fromDate");
+
+const toDate =
+  document.getElementById("toDate");
 
 const filterButton =
   document.getElementById("filterButton");
@@ -56,210 +72,347 @@ const todayButton =
 const printButton =
   document.getElementById("printButton");
 
+const addRowButton =
+  document.getElementById("addRowButton");
 
-// ---------- DATE ----------
 
-function getToday() {
+// ===============================
+// FILE SELECTION
+// ===============================
 
-  const now = new Date();
+invoiceInput.addEventListener("change", () => {
 
-  const year =
-    now.getFullYear();
+  selectedFiles.innerHTML = "";
 
-  const month =
-    String(now.getMonth() + 1)
-      .padStart(2, "0");
+  const files = Array.from(
+    invoiceInput.files || []
+  );
 
-  const day =
-    String(now.getDate())
-      .padStart(2, "0");
+  if (!files.length) {
+    selectedFiles.textContent =
+      "No image selected";
+    return;
+  }
 
-  return `${year}-${month}-${day}`;
+  files.forEach((file, index) => {
+
+    const div =
+      document.createElement("div");
+
+    div.textContent =
+      `${index + 1}. ${file.name}`;
+
+    selectedFiles.appendChild(div);
+
+  });
+
+});
+
+
+// ===============================
+// LOAD DATA FROM SUPABASE
+// ===============================
+
+async function loadRows() {
+
+  try {
+
+    const { data, error } =
+      await db
+        .from("warehouse_entries")
+        .select("*")
+        .order("entry_date", {
+          ascending: false,
+        })
+        .order("created_at", {
+          ascending: true,
+        });
+
+    if (error) {
+      throw error;
+    }
+
+    rows = (data || []).map(item => ({
+
+      id: item.id,
+
+      date: item.entry_date,
+
+      product: item.product_name,
+
+      quantity: Number(item.quantity || 0),
+
+      unit: item.unit || "pcs",
+
+      reference:
+        item.reference || "",
+
+      entry_by:
+        item.entry_by || "",
+
+    }));
+
+    renderTable();
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      "Supabase data load failed:\n" +
+      error.message
+    );
+
+  }
+
 }
 
 
-// ---------- UUID CHECK ----------
+// ===============================
+// SAVE ONE ROW
+// ===============================
+
+async function saveRow(row) {
+
+  const payload = {
+
+    entry_date:
+      row.date ||
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+
+    product_name:
+      row.product || "Unknown Product",
+
+    quantity:
+      Number(row.quantity || 0),
+
+    unit:
+      row.unit || "pcs",
+
+    reference:
+      row.reference || "",
+
+    entry_by:
+      row.entry_by ||
+      userSelect.value,
+
+  };
+
+
+  // Existing database row
+  if (
+    row.id &&
+    isUUID(row.id)
+  ) {
+
+    const { data, error } =
+      await db
+        .from("warehouse_entries")
+        .update(payload)
+        .eq("id", row.id)
+        .select()
+        .single();
+
+    if (error) {
+      throw error;
+    }
+
+    row.id = data.id;
+
+    return row;
+  }
+
+
+  // New row
+  const { data, error } =
+    await db
+      .from("warehouse_entries")
+      .insert(payload)
+      .select()
+      .single();
+
+  if (error) {
+    throw error;
+  }
+
+  row.id = data.id;
+
+  return row;
+
+}
+
+
+// ===============================
+// DELETE ROW
+// ===============================
+
+async function deleteRow(index) {
+
+  const row = rows[index];
+
+  if (!row) return;
+
+  const confirmDelete =
+    confirm(
+      `Delete "${row.product}"?`
+    );
+
+  if (!confirmDelete) {
+    return;
+  }
+
+
+  try {
+
+    if (
+      row.id &&
+      isUUID(row.id)
+    ) {
+
+      const { error } =
+        await db
+          .from("warehouse_entries")
+          .delete()
+          .eq("id", row.id);
+
+      if (error) {
+        throw error;
+      }
+
+    }
+
+    rows.splice(index, 1);
+
+    renderTable();
+
+  } catch (error) {
+
+    alert(
+      "Delete failed:\n" +
+      error.message
+    );
+
+  }
+
+}
+
+
+// ===============================
+// CHECK UUID
+// ===============================
 
 function isUUID(value) {
 
   return typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value
+    );
 
 }
 
 
-// ---------- LOAD DATA FROM SUPABASE ----------
+// ===============================
+// ADD / MERGE ROW
+// ===============================
 
-async function loadRowsFromSupabase() {
+function addOrMergeRow(newRow) {
 
-  scanStatus.textContent =
-    "⏳ Supabase থেকে data load হচ্ছে...";
+  const existingIndex =
+    rows.findIndex(row =>
 
-  const {
-    data,
-    error
-  } = await db
-    .from("warehouse_entries")
-    .select("*")
-    .order("entry_date", {
-      ascending: false
-    })
-    .order("created_at", {
-      ascending: true
-    });
+      row.date === newRow.date &&
 
+      row.product
+        .trim()
+        .toLowerCase() ===
+      newRow.product
+        .trim()
+        .toLowerCase() &&
 
-  if (error) {
-
-    console.error(
-      "Supabase Load Error:",
-      error
-    );
-
-    scanStatus.textContent =
-      "❌ Database থেকে data load করা যায়নি।";
-
-    alert(
-      "Supabase connection/database error.\n\n" +
-      error.message
-    );
-
-    return;
-
-  }
-
-
-  rows =
-    (data || []).map(
-      item => ({
-
-        id:
-          item.id,
-
-        date:
-          item.entry_date,
-
-        product:
-          item.product_name,
-
-        quantity:
-          Number(item.quantity) || 0,
-
-        unit:
-          item.unit || "pcs",
-
-        reference:
-          item.reference || "",
-
-        entry_by:
-          item.entry_by || ""
-
-      })
+      row.unit === newRow.unit
     );
 
 
-  renderTable();
+  // Merge same product/date/unit
+  if (existingIndex !== -1) {
 
-  scanStatus.textContent =
-    rows.length > 0
-      ? `✅ ${rows.length}টি saved row পাওয়া গেছে।`
-      : "✅ Database connected। এখন data add করুন।";
-
-}
-
-
-// ---------- FILE SELECT ----------
-
-invoiceInput.addEventListener(
-  "change",
-  function () {
-
-    selectedFiles =
-      Array.from(this.files);
-
-    selectedFilesBox.innerHTML = "";
-
+    rows[existingIndex].quantity =
+      Number(rows[existingIndex].quantity || 0) +
+      Number(newRow.quantity || 0);
 
     if (
-      selectedFiles.length === 0
+      newRow.reference &&
+      !rows[existingIndex].reference
+        .split(",")
+        .map(x => x.trim())
+        .includes(newRow.reference)
     ) {
 
-      return;
+      rows[existingIndex].reference =
+        rows[existingIndex].reference
+          ? `${rows[existingIndex].reference}, ${newRow.reference}`
+          : newRow.reference;
 
     }
 
-
-    const title =
-      document.createElement("div");
-
-    title.innerHTML =
-      `<strong>${selectedFiles.length}</strong>টি ছবি selected`;
-
-    selectedFilesBox.appendChild(title);
-
-
-    selectedFiles.forEach(
-      (file, index) => {
-
-        const item =
-          document.createElement("div");
-
-        item.textContent =
-          `${index + 1}. ${file.name}`;
-
-        selectedFilesBox.appendChild(item);
-
-      }
-    );
-
+    return rows[existingIndex];
   }
-);
 
 
-// ---------- SCAN ----------
+  rows.push(newRow);
+
+  return newRow;
+
+}
+
+
+// ===============================
+// SCAN WITH AI
+// ===============================
 
 scanButton.addEventListener(
   "click",
-  async function () {
+  async () => {
 
-    if (
-      selectedFiles.length === 0
-    ) {
+    const files =
+      Array.from(
+        invoiceInput.files || []
+      );
+
+    if (!files.length) {
 
       alert(
-        "আগে Invoice/Chalan-এর ছবি নির্বাচন করুন।"
+        "Please select invoice/chalan image first."
       );
 
       return;
-
     }
 
 
     scanButton.disabled = true;
 
     scanStatus.textContent =
-      "🤖 AI invoice scan শুরু হয়েছে...";
+      "🤖 AI scanning... Please wait";
 
 
     try {
 
       for (
         let i = 0;
-        i < selectedFiles.length;
+        i < files.length;
         i++
       ) {
 
+        const file = files[i];
+
         scanStatus.textContent =
-          `🤖 ${i + 1}/${selectedFiles.length} invoice scan হচ্ছে...`;
-
-
-        const file =
-          selectedFiles[i];
+          `🤖 Scanning ${i + 1} of ${files.length}...`;
 
 
         const formData =
           new FormData();
-
 
         formData.append(
           "invoice",
@@ -269,105 +422,130 @@ scanButton.addEventListener(
 
         const response =
           await fetch(
-            "/api/parse-invoice",
+            AI_API_URL,
             {
               method: "POST",
-              body: formData
+              body: formData,
             }
           );
-
-
-        if (!response.ok) {
-
-          throw new Error(
-            "AI server error"
-          );
-
-        }
 
 
         const result =
           await response.json();
 
 
-        if (
-          result.items &&
-          Array.isArray(result.items)
-        ) {
+        if (!response.ok) {
 
-          result.items.forEach(
-            item => {
-
-              addOrMergeRow({
-
-                date:
-                  result.date ||
-                  getToday(),
-
-                product:
-                  item.product ||
-                  "",
-
-                quantity:
-                  Number(
-                    item.quantity
-                  ) || 0,
-
-                unit:
-                  item.unit ||
-                  "pcs",
-
-                reference:
-                  result.reference ||
-                  "",
-
-                entry_by:
-                  userSelect.value
-
-              });
-
-            }
+          throw new Error(
+            result.error ||
+            "AI scanning failed"
           );
+
+        }
+
+
+        const date =
+          result.date ||
+          new Date()
+            .toISOString()
+            .slice(0, 10);
+
+        const reference =
+          result.reference || "";
+
+
+        const items =
+          Array.isArray(result.items)
+            ? result.items
+            : [];
+
+
+        if (!items.length) {
+
+          console.warn(
+            "No products found:",
+            file.name
+          );
+
+          continue;
+
+        }
+
+
+        for (const item of items) {
+
+          const row = {
+
+            date,
+
+            product:
+              item.product ||
+              "Unknown Product",
+
+            quantity:
+              Number(
+                item.quantity || 0
+              ),
+
+            unit:
+              item.unit ||
+              "pcs",
+
+            reference,
+
+            entry_by:
+              userSelect.value,
+
+          };
+
+
+          addOrMergeRow(row);
 
         }
 
       }
 
 
-      renderTable();
+      // Save all rows
+      scanStatus.textContent =
+        "💾 Saving data to database...";
+
+
+      for (const row of rows) {
+
+        if (
+          row.id &&
+          isUUID(row.id)
+        ) {
+
+          continue;
+
+        }
+
+        await saveRow(row);
+
+      }
 
 
       scanStatus.textContent =
-        "⏳ Scan complete। Database-এ save হচ্ছে...";
-
-
-      await saveAllRows();
-
-
-      scanStatus.textContent =
-        "✅ Scan + Database save সম্পূর্ণ হয়েছে।";
-
-
-      selectedFiles = [];
+        "✅ Scan completed and saved!";
 
       invoiceInput.value = "";
 
-      selectedFilesBox.innerHTML = "";
+      selectedFiles.innerHTML = "";
+
+      renderTable();
 
 
     } catch (error) {
 
-      console.error(
-        "Scan Error:",
-        error
-      );
+      console.error(error);
 
       scanStatus.textContent =
-        "❌ Scan করতে সমস্যা হয়েছে।";
-
+        "❌ Scan failed";
 
       alert(
-        "AI scan করতে সমস্যা হয়েছে।\n\n" +
+        "AI Scan Error:\n" +
         error.message
       );
 
@@ -381,285 +559,28 @@ scanButton.addEventListener(
 );
 
 
-// ---------- PRODUCT NORMALIZE ----------
-
-function normalizeProductName(name) {
-
-  return String(name)
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-
-}
-
-
-// ---------- ADD / MERGE ----------
-
-function addOrMergeRow(item) {
-
-  const normalized =
-    normalizeProductName(
-      item.product
-    );
-
-
-  const existing =
-    rows.find(
-      row =>
-
-        normalizeProductName(
-          row.product
-        ) === normalized
-
-        &&
-
-        row.unit === item.unit
-
-        &&
-
-        row.date === item.date
-    );
-
-
-  if (existing) {
-
-    existing.quantity =
-      Number(existing.quantity)
-      +
-      Number(item.quantity);
-
-
-    if (
-      item.reference &&
-      !existing.reference.includes(
-        item.reference
-      )
-    ) {
-
-      existing.reference +=
-        existing.reference
-          ? `, ${item.reference}`
-          : item.reference;
-
-    }
-
-
-    if (
-      existing.entry_by !==
-      item.entry_by
-    ) {
-
-      const names =
-        existing.entry_by
-          .split(", ")
-          .filter(Boolean);
-
-
-      if (
-        !names.includes(
-          item.entry_by
-        )
-      ) {
-
-        names.push(
-          item.entry_by
-        );
-
-      }
-
-
-      existing.entry_by =
-        names.join(", ");
-
-    }
-
-  } else {
-
-    rows.push({
-
-      id:
-        null,
-
-      date:
-        item.date ||
-        getToday(),
-
-      product:
-        item.product ||
-        "",
-
-      quantity:
-        Number(
-          item.quantity
-        ) || 0,
-
-      unit:
-        item.unit ||
-        "pcs",
-
-      reference:
-        item.reference ||
-        "",
-
-      entry_by:
-        item.entry_by ||
-        userSelect.value ||
-        "Unknown"
-
-    });
-
-  }
-
-}
-
-
-// ---------- SAVE ALL ----------
-
-async function saveAllRows() {
-
-  if (
-    rows.length === 0
-  ) {
-
-    return;
-
-  }
-
-
-  for (
-    const row of rows
-  ) {
-
-    if (
-      !row.product ||
-      !row.product.trim()
-    ) {
-
-      continue;
-
-    }
-
-
-    const dbData = {
-
-      entry_date:
-        row.date ||
-        getToday(),
-
-      product_name:
-        row.product.trim(),
-
-      quantity:
-        Number(
-          row.quantity
-        ) || 0,
-
-      unit:
-        row.unit ||
-        "pcs",
-
-      reference:
-        row.reference ||
-        "",
-
-      entry_by:
-        row.entry_by ||
-        userSelect.value ||
-        "Unknown"
-
-    };
-
-
-    // Existing row update
-
-    if (
-      isUUID(row.id)
-    ) {
-
-      const {
-        error
-      } =
-        await db
-          .from(
-            "warehouse_entries"
-          )
-          .update(dbData)
-          .eq(
-            "id",
-            row.id
-          );
-
-
-      if (error) {
-
-        console.error(
-          error
-        );
-
-        throw error;
-
-      }
-
-    }
-
-
-    // New row insert
-
-    else {
-
-      const {
-        data,
-        error
-      } =
-        await db
-          .from(
-            "warehouse_entries"
-          )
-          .insert(
-            dbData
-          )
-          .select()
-          .single();
-
-
-      if (error) {
-
-        console.error(
-          error
-        );
-
-        throw error;
-
-      }
-
-
-      row.id =
-        data.id;
-
-    }
-
-  }
-
-
-  renderTable();
-
-}
-
-
-// ---------- RENDER TABLE ----------
+// ===============================
+// RENDER TABLE
+// ===============================
 
 function renderTable() {
 
   tableBody.innerHTML = "";
 
 
-  rows.forEach(
-    (row, index) => {
+  let filteredRows =
+    getFilteredRows();
+
+
+  filteredRows.forEach(
+    (row, filteredIndex) => {
+
+      const realIndex =
+        rows.indexOf(row);
+
 
       const tr =
-        document.createElement(
-          "tr"
-        );
+        document.createElement("tr");
 
 
       tr.innerHTML = `
@@ -667,55 +588,65 @@ function renderTable() {
         <td>
           <input
             type="date"
-            value="${escapeHtml(row.date)}"
-            onchange="updateRow(${index}, 'date', this.value)"
+            value="${escapeHtml(row.date || "")}"
+            data-field="date"
           >
         </td>
 
         <td>
           <input
             type="text"
-            value="${escapeHtml(row.product)}"
-            onchange="updateRow(${index}, 'product', this.value)"
+            value="${escapeHtml(row.product || "")}"
+            data-field="product"
           >
         </td>
 
         <td>
           <input
             type="number"
-            min="0"
-            value="${row.quantity}"
-            onchange="updateRow(${index}, 'quantity', this.value)"
+            value="${Number(row.quantity || 0)}"
+            data-field="quantity"
           >
         </td>
 
         <td>
           <input
             type="text"
-            value="${escapeHtml(row.unit)}"
-            onchange="updateRow(${index}, 'unit', this.value)"
+            value="${escapeHtml(row.unit || "pcs")}"
+            data-field="unit"
           >
         </td>
 
         <td>
           <input
             type="text"
-            value="${escapeHtml(row.reference)}"
-            onchange="updateRow(${index}, 'reference', this.value)"
+            value="${escapeHtml(row.reference || "")}"
+            data-field="reference"
           >
         </td>
 
         <td>
-          ${escapeHtml(row.entry_by)}
+          <input
+            type="text"
+            value="${escapeHtml(row.entry_by || "")}"
+            data-field="entry_by"
+          >
         </td>
 
         <td>
 
           <button
-            class="delete-btn"
-            onclick="deleteRow(${index})"
+            class="save-row"
+            data-index="${realIndex}"
           >
-            Delete
+            💾
+          </button>
+
+          <button
+            class="delete-row"
+            data-index="${realIndex}"
+          >
+            🗑️
           </button>
 
         </td>
@@ -723,539 +654,402 @@ function renderTable() {
       `;
 
 
-      tableBody.appendChild(
-        tr
-      );
+      tableBody.appendChild(tr);
 
     }
   );
 
 
-  updateSummary();
+  updateSummary(
+    filteredRows
+  );
 
-}
 
+  // Save buttons
+  document
+    .querySelectorAll(".save-row")
+    .forEach(button => {
 
-// ---------- UPDATE ROW ----------
+      button.addEventListener(
+        "click",
+        async () => {
 
-window.updateRow =
-  async function (
-    index,
-    field,
-    value
-  ) {
+          const index =
+            Number(
+              button.dataset.index
+            );
 
-    if (
-      field === "quantity"
-    ) {
+          const row =
+            rows[index];
 
-      value =
-        Number(value) || 0;
+          const tr =
+            button.closest("tr");
 
-    }
 
+          tr
+            .querySelectorAll(
+              "input"
+            )
+            .forEach(input => {
 
-    rows[index][field] =
-      value;
+              const field =
+                input.dataset.field;
 
+              if (
+                field === "quantity"
+              ) {
 
-    const row =
-      rows[index];
+                row[field] =
+                  Number(
+                    input.value || 0
+                  );
 
+              } else {
 
-    // যদি database-এ already থাকে
+                row[field] =
+                  input.value;
 
-    if (
-      isUUID(row.id)
-    ) {
+              }
 
-      const dbData = {
+            });
 
-        entry_date:
-          row.date,
 
-        product_name:
-          row.product,
+          try {
 
-        quantity:
-          Number(
-            row.quantity
-          ) || 0,
+            await saveRow(row);
 
-        unit:
-          row.unit ||
-          "pcs",
+            alert(
+              "✅ Saved successfully"
+            );
 
-        reference:
-          row.reference ||
-          "",
+            renderTable();
 
-        entry_by:
-          row.entry_by ||
-          userSelect.value ||
-          "Unknown"
+          } catch (error) {
 
-      };
-
-
-      const {
-        error
-      } =
-        await db
-          .from(
-            "warehouse_entries"
-          )
-          .update(
-            dbData
-          )
-          .eq(
-            "id",
-            row.id
-          );
-
-
-      if (error) {
-
-        console.error(
-          error
-        );
-
-        alert(
-          "Database update হয়নি:\n" +
-          error.message
-        );
-
-      }
-
-    }
-
-  };
-
-
-// ---------- DELETE ----------
-
-window.deleteRow =
-  async function (
-    index
-  ) {
-
-    if (
-      !confirm(
-        "এই row delete করবেন?"
-      )
-    ) {
-
-      return;
-
-    }
-
-
-    const row =
-      rows[index];
-
-
-    // Database row হলে database থেকেও delete
-
-    if (
-      isUUID(row.id)
-    ) {
-
-      const {
-        error
-      } =
-        await db
-          .from(
-            "warehouse_entries"
-          )
-          .delete()
-          .eq(
-            "id",
-            row.id
-          );
-
-
-      if (error) {
-
-        console.error(
-          error
-        );
-
-        alert(
-          "Database থেকে delete হয়নি:\n" +
-          error.message
-        );
-
-        return;
-
-      }
-
-    }
-
-
-    rows.splice(
-      index,
-      1
-    );
-
-
-    renderTable();
-
-  };
-
-
-// ---------- ADD MANUAL ROW ----------
-
-addRowButton.addEventListener(
-  "click",
-  function () {
-
-    rows.push({
-
-      id:
-        null,
-
-      date:
-        getToday(),
-
-      product:
-        "",
-
-      quantity:
-        0,
-
-      unit:
-        "pcs",
-
-      reference:
-        "",
-
-      entry_by:
-        userSelect.value ||
-        "Unknown"
-
-    });
-
-
-    renderTable();
-
-  }
-);
-
-
-// ---------- SUMMARY ----------
-
-function updateSummary() {
-
-  document.getElementById(
-    "totalRows"
-  ).textContent =
-    rows.length;
-
-
-  document.getElementById(
-    "totalProducts"
-  ).textContent =
-    rows.reduce(
-      (
-        total,
-        row
-      ) =>
-        total +
-        Number(
-          row.quantity ||
-          0
-        ),
-      0
-    );
-
-}
-
-
-// ---------- TODAY ----------
-
-todayButton.addEventListener(
-  "click",
-  function () {
-
-    const today =
-      getToday();
-
-
-    document.getElementById(
-      "fromDate"
-    ).value =
-      today;
-
-
-    document.getElementById(
-      "toDate"
-    ).value =
-      today;
-
-
-    filterRows();
-
-  }
-);
-
-
-// ---------- FILTER ----------
-
-filterButton.addEventListener(
-  "click",
-  function () {
-
-    filterRows();
-
-  }
-);
-
-
-function filterRows() {
-
-  const from =
-    document.getElementById(
-      "fromDate"
-    ).value;
-
-
-  const to =
-    document.getElementById(
-      "toDate"
-    ).value;
-
-
-  if (
-    !from &&
-    !to
-  ) {
-
-    renderTable();
-
-    return;
-
-  }
-
-
-  const filtered =
-    rows.filter(
-      row => {
-
-        if (
-          from &&
-          row.date < from
-        ) {
-
-          return false;
-
-        }
-
-
-        if (
-          to &&
-          row.date > to
-        ) {
-
-          return false;
-
-        }
-
-
-        return true;
-
-      }
-    );
-
-
-  const original =
-    rows;
-
-
-  rows =
-    filtered;
-
-
-  renderTable();
-
-
-  rows =
-    original;
-
-}
-
-
-// ---------- PRINT ----------
-
-printButton.addEventListener(
-  "click",
-  function () {
-
-    createPrint();
-
-    window.print();
-
-  }
-);
-
-
-function createPrint() {
-
-  const printArea =
-    document.getElementById(
-      "printArea"
-    );
-
-
-  const from =
-    document.getElementById(
-      "fromDate"
-    ).value;
-
-
-  const to =
-    document.getElementById(
-      "toDate"
-    ).value;
-
-
-  let data =
-    rows;
-
-
-  if (
-    from ||
-    to
-  ) {
-
-    data =
-      rows.filter(
-        row => {
-
-          if (
-            from &&
-            row.date < from
-          ) {
-
-            return false;
+            alert(
+              "Save failed:\n" +
+              error.message
+            );
 
           }
-
-
-          if (
-            to &&
-            row.date > to
-          ) {
-
-            return false;
-
-          }
-
-
-          return true;
 
         }
       );
 
+    });
+
+
+  // Delete buttons
+  document
+    .querySelectorAll(".delete-row")
+    .forEach(button => {
+
+      button.addEventListener(
+        "click",
+        () => {
+
+          deleteRow(
+            Number(
+              button.dataset.index
+            )
+          );
+
+        }
+      );
+
+    });
+
+}
+
+
+// ===============================
+// FILTER
+// ===============================
+
+function getFilteredRows() {
+
+  const from =
+    fromDate.value;
+
+  const to =
+    toDate.value;
+
+
+  return rows.filter(row => {
+
+    if (
+      from &&
+      row.date < from
+    ) {
+
+      return false;
+
+    }
+
+
+    if (
+      to &&
+      row.date > to
+    ) {
+
+      return false;
+
+    }
+
+
+    return true;
+
+  });
+
+}
+
+
+filterButton.addEventListener(
+  "click",
+  () => {
+
+    renderTable();
+
   }
+);
 
 
-  let html = `
+// ===============================
+// TODAY
+// ===============================
 
-    <div class="print-title">
+todayButton.addEventListener(
+  "click",
+  () => {
 
-      <h2>Warehouse OUT Report</h2>
+    const today =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
 
-      <p>
-        ${from || "All"}
-        to
-        ${to || "All"}
-      </p>
+    fromDate.value = today;
 
-    </div>
+    toDate.value = today;
 
-    <table>
+    renderTable();
 
-      <thead>
-
-        <tr>
-
-          <th>Date</th>
-          <th>Product</th>
-          <th>Quantity</th>
-          <th>Unit</th>
-          <th>Invoice / Chalan</th>
-          <th>Entry By</th>
-
-        </tr>
-
-      </thead>
-
-      <tbody>
-
-  `;
+  }
+);
 
 
-  data.forEach(
-    row => {
+// ===============================
+// ADD MANUAL PRODUCT
+// ===============================
+
+addRowButton.addEventListener(
+  "click",
+  async () => {
+
+    const row = {
+
+      date:
+        new Date()
+          .toISOString()
+          .slice(0, 10),
+
+      product: "",
+
+      quantity: 0,
+
+      unit: "pcs",
+
+      reference: "",
+
+      entry_by:
+        userSelect.value,
+
+    };
+
+
+    rows.unshift(row);
+
+    renderTable();
+
+  }
+);
+
+
+// ===============================
+// PRINT
+// ===============================
+
+printButton.addEventListener(
+  "click",
+  () => {
+
+    const printArea =
+      document.getElementById(
+        "printArea"
+      );
+
+    const filteredRows =
+      getFilteredRows();
+
+
+    let html = `
+
+      <h2>Warehouse Daily OUT Report</h2>
+
+      <table border="1"
+             cellspacing="0"
+             cellpadding="6"
+             style="width:100%;border-collapse:collapse">
+
+        <thead>
+
+          <tr>
+            <th>Date</th>
+            <th>Product Name</th>
+            <th>Quantity</th>
+            <th>Unit</th>
+            <th>Invoice / Chalan</th>
+            <th>Entry By</th>
+          </tr>
+
+        </thead>
+
+        <tbody>
+    `;
+
+
+    filteredRows.forEach(row => {
 
       html += `
 
         <tr>
 
-          <td>
-            ${escapeHtml(row.date)}
-          </td>
+          <td>${escapeHtml(row.date)}</td>
 
-          <td>
-            ${escapeHtml(row.product)}
-          </td>
+          <td>${escapeHtml(row.product)}</td>
 
-          <td>
-            ${row.quantity}
-          </td>
+          <td>${Number(row.quantity || 0)}</td>
 
-          <td>
-            ${escapeHtml(row.unit)}
-          </td>
+          <td>${escapeHtml(row.unit)}</td>
 
-          <td>
-            ${escapeHtml(row.reference)}
-          </td>
+          <td>${escapeHtml(row.reference)}</td>
 
-          <td>
-            ${escapeHtml(row.entry_by)}
-          </td>
+          <td>${escapeHtml(row.entry_by)}</td>
 
         </tr>
 
       `;
 
-    }
-  );
+    });
 
 
-  html += `
+    html += `
 
-      </tbody>
+        </tbody>
 
-    </table>
+      </table>
 
-  `;
+    `;
 
 
-  printArea.innerHTML =
-    html;
+    printArea.innerHTML = html;
+
+
+    const win =
+      window.open(
+        "",
+        "_blank"
+      );
+
+
+    win.document.write(`
+
+      <html>
+
+        <head>
+
+          <title>Warehouse Report</title>
+
+          <style>
+
+            body {
+              font-family: Arial;
+              padding: 20px;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            th,
+            td {
+              border: 1px solid #000;
+              padding: 6px;
+            }
+
+            th {
+              font-weight: bold;
+            }
+
+          </style>
+
+        </head>
+
+        <body>
+
+          ${html}
+
+        </body>
+
+      </html>
+
+    `);
+
+
+    win.document.close();
+
+    win.print();
+
+  }
+);
+
+
+// ===============================
+// SUMMARY
+// ===============================
+
+function updateSummary(
+  filteredRows
+) {
+
+  totalRows.textContent =
+    filteredRows.length;
+
+
+  const total =
+    filteredRows.reduce(
+      (sum, row) =>
+        sum +
+        Number(
+          row.quantity || 0
+        ),
+      0
+    );
+
+
+  totalProducts.textContent =
+    total;
 
 }
 
 
-// ---------- SECURITY ----------
+// ===============================
+// ESCAPE HTML
+// ===============================
 
 function escapeHtml(value) {
 
-  return String(
-    value ?? ""
-  )
+  return String(value ?? "")
     .replace(
       /&/g,
       "&amp;"
@@ -1280,24 +1074,8 @@ function escapeHtml(value) {
 }
 
 
-// ---------- INITIALIZE ----------
+// ===============================
+// START APP
+// ===============================
 
-(async function () {
-
-  try {
-
-    await loadRowsFromSupabase();
-
-  } catch (error) {
-
-    console.error(
-      "Initialization Error:",
-      error
-    );
-
-    scanStatus.textContent =
-      "❌ App initialize করতে সমস্যা হয়েছে।";
-
-  }
-
-})();
+loadRows();
